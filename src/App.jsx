@@ -1,138 +1,183 @@
-import React, { useState, useEffect } from "react";
+import React, { useEffect, useState, useCallback, useMemo } from "react";
+import { Routes, Route, Navigate } from "react-router-dom";
 import { Navbar } from "./components/Navbar";
 import { MetricCards } from "./components/MetricCards";
 import { ExpenseTable } from "./components/ExpenseTable";
-import { AnalyticsView } from "./components/AnalyticsView";
-import { ExpenseFormModal } from "./components/ExpenseFormModal";
+import { LoginPage } from "./pages/LoginPage";
+import { ProtectedRoute } from "./components/ProtectedRoute";
+import { useAuth } from "./context/AuthContext";
+
+
+export function calculateExpenseSummary(expenses = []) {
+  const now = new Date();
+  const currentYear = now.getFullYear();
+  const currentMonth = now.getMonth();
+
+
+  const totalExpenses = expenses.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
+
+
+  const thisMonthExpenses = expenses
+    .filter((item) => {
+      if (!item.date) return false;
+      const d = new Date(item.date);
+      return d.getFullYear() === currentYear && d.getMonth() === currentMonth;
+    })
+    .reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
+
+
+  const totalTransactions = expenses.length;
+
+
+  const uniqueCategories = new Set(
+    expenses.map((item) => item.category).filter(Boolean)
+  );
+  const categoriesCount = uniqueCategories.size;
+
+  return {
+    totalExpenses,
+    thisMonthExpenses,
+    totalTransactions,
+    categoriesCount,
+  };
+}
 
 export default function App() {
-  const [expenses, setExpenses] = useState(() => {
-    const saved = localStorage.getItem("expense_tracker_db_v1");
-    return saved
-      ? JSON.parse(saved)
-      : [
-          { id: 1, amount: 10.0, description: "10", category: "Food & Dining", date: "2026-08-09" },
-        ];
-  });
+  const { isAuthenticated } = useAuth();
 
-  const [activeTab, setActiveTab] = useState("expenses");
+  return (
+    <Routes>
+      <Route
+        path="/login"
+        element={
+          isAuthenticated ? <Navigate to="/" replace /> : <LoginPage />
+        }
+      />
+      <Route
+        path="/*"
+        element={
+          <ProtectedRoute>
+            <Dashboard />
+          </ProtectedRoute>
+        }
+      />
+    </Routes>
+  );
+}
+
+function Dashboard() {
+  const { token } = useAuth();
+  const [expenses, setExpenses] = useState([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("All Categories");
-  const [sortBy, setSortBy] = useState("Date");
+  const [sortBy, setSortBy] = useState("date-desc");
+  const [show, setShow] = useState(false);
 
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editingExpense, setEditingExpense] = useState(null);
+  const [categories, setCategories] = useState([]);
 
-  const categories = ["Food & Dining", "Transportation", "Utilities", "Entertainment", "Shopping", "Health", "Other"];
+  const fetchCategories = useCallback(async () => {
+    try {
+      const res = await fetch("http://localhost:8000/category/getAll");
+      const data = await res.json();
+      if (Array.isArray(data)) {
+        setCategories(data.map((c) => (typeof c === "string" ? c : c.title)));
+      }
+    } catch (err) {
+      console.error("Failed to fetch categories:", err);
+    }
+  }, []);
+
+  const fetchExpenses = useCallback(async () => {
+    try {
+      const res = await fetch("http://localhost:8000/expense/getAll", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      // Supports both plain array [...] and { data: [...] }
+      if (Array.isArray(data)) {
+        setExpenses(data);
+      } else if (data && Array.isArray(data.data)) {
+        setExpenses(data.data);
+      } else {
+        setExpenses([]);
+      }
+    } catch (err) {
+      console.error("Failed to fetch expenses:", err);
+    }
+  }, [token]);
 
   useEffect(() => {
-    localStorage.setItem("expense_tracker_db_v1", JSON.stringify(expenses));
-  }, [expenses]);
+    fetchExpenses();
+    fetchCategories();
+  }, [fetchExpenses, fetchCategories]);
 
-  const cleanExpenses = expenses.map((e) => ({ ...e, amount: Number(e.amount) || 0 }));
-  const totalExpenses = cleanExpenses.reduce((sum, item) => sum + item.amount, 0);
 
-  const filteredExpenses = cleanExpenses
-    .filter((e) => {
-      const matchesSearch = e.description.toLowerCase().includes(searchQuery.toLowerCase());
-      const matchesCat = categoryFilter === "All Categories" || e.category === categoryFilter;
-      return matchesSearch && matchesCat;
-    })
-    .sort((a, b) => {
-      if (sortBy === "Date") return new Date(b.date) - new Date(a.date);
-      if (sortBy === "Amount") return b.amount - a.amount;
-      return 0;
-    });
+  const summary = useMemo(() => calculateExpenseSummary(expenses), [expenses]);
 
-  const handleOpenAdd = () => {
-    setEditingExpense(null);
-    setIsModalOpen(true);
-  };
 
-  const handleOpenEdit = (expense) => {
-    setEditingExpense(expense);
-    setIsModalOpen(true);
-  };
-
-  const handleSave = (data) => {
-    if (editingExpense) {
-      setExpenses((prev) =>
-        prev.map((e) => (e.id === editingExpense.id ? { ...data, id: editingExpense.id } : e))
-      );
-    } else {
-      setExpenses((prev) => [{ ...data, id: Date.now() }, ...prev]);
-    }
-    setIsModalOpen(false);
-  };
-
-  const handleDelete = (id) => {
-    if (window.confirm("Delete this expense?")) {
-      setExpenses((prev) => prev.filter((e) => e.id !== id));
-    }
-  };
+  const filteredExpenses = useMemo(() => {
+    return expenses
+      .filter((item) => {
+        const desc = (item.description || "").toLowerCase();
+        const matchesSearch =
+          !searchQuery.trim() || desc.includes(searchQuery.trim().toLowerCase());
+        const matchesCategory =
+          categoryFilter === "All Categories" || item.category === categoryFilter;
+        return matchesSearch && matchesCategory;
+      })
+      .sort((a, b) => {
+        if (sortBy === "date-desc") return new Date(b.date || 0) - new Date(a.date || 0);
+        if (sortBy === "date-asc") return new Date(a.date || 0) - new Date(b.date || 0);
+        if (sortBy === "amount-desc")
+          return (Number(b.amount) || 0) - (Number(a.amount) || 0);
+        if (sortBy === "amount-asc")
+          return (Number(a.amount) || 0) - (Number(b.amount) || 0);
+        return 0;
+      });
+  }, [expenses, searchQuery, categoryFilter, sortBy]);
 
   return (
     <div className="min-h-screen bg-[#f8f9fa] text-gray-900 font-sans flex flex-col pb-12">
       <Navbar />
 
-      {/* Changed max-w-5xl to max-w-7xl (or max-w-full px-12) for wider layout */}
       <main className="max-w-7xl mx-auto w-full px-6 md:px-12 pt-8 flex-1">
-        <MetricCards expenses={cleanExpenses} totalExpenses={totalExpenses} />
+        <MetricCards summary={summary} />
 
         <div className="flex justify-between items-center mb-6">
           <div className="bg-gray-200/80 p-1 rounded-xl flex gap-1">
-            <button
-              onClick={() => setActiveTab("expenses")}
-              className={`px-5 py-2 text-xs font-semibold rounded-lg transition cursor-pointer ${
-                activeTab === "expenses" ? "bg-white text-gray-900 shadow-xs" : "text-gray-600 hover:text-gray-900"
-              }`}
-            >
+            <button className="px-5 py-2 text-xs font-semibold rounded-lg bg-white text-gray-900 shadow-xs cursor-pointer">
               Expenses
             </button>
             <button
-              onClick={() => setActiveTab("analytics")}
-              className={`px-5 py-2 text-xs font-semibold rounded-lg transition cursor-pointer ${
-                activeTab === "analytics" ? "bg-white text-gray-900 shadow-xs" : "text-gray-600 hover:text-gray-900"
-              }`}
+              className="px-5 py-2 text-xs font-semibold rounded-lg text-gray-600 hover:text-gray-900 cursor-pointer"
+              onClick={() => {}}
             >
               Analytics
             </button>
           </div>
 
           <button
-            onClick={handleOpenAdd}
+            onClick={() => setShow(true)}
             className="bg-black hover:bg-gray-800 text-white px-5 py-2.5 rounded-xl text-xs font-semibold shadow-xs transition cursor-pointer flex items-center gap-1.5"
           >
             + Add Expense
           </button>
         </div>
 
-        {activeTab === "expenses" ? (
-          <ExpenseTable
-            expenses={cleanExpenses}
-            filteredExpenses={filteredExpenses}
-            searchQuery={searchQuery}
-            setSearchQuery={setSearchQuery}
-            categoryFilter={categoryFilter}
-            setCategoryFilter={setCategoryFilter}
-            sortBy={sortBy}
-            setSortBy={setSortBy}
-            categories={categories}
-            onEdit={handleOpenEdit}
-            onDelete={handleDelete}
-          />
-        ) : (
-          <AnalyticsView expenses={cleanExpenses} totalExpenses={totalExpenses} />
-        )}
+        <ExpenseTable
+          expenses={filteredExpenses}
+          fetchExpenses={fetchExpenses}
+          searchQuery={searchQuery}
+          setSearchQuery={setSearchQuery}
+          categoryFilter={categoryFilter}
+          setCategoryFilter={setCategoryFilter}
+          sortBy={sortBy}
+          setSortBy={setSortBy}
+          categories={categories}
+          show={show}
+          setShow={setShow}
+        />
       </main>
-
-      <ExpenseFormModal
-        isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
-        onSave={handleSave}
-        editingExpense={editingExpense}
-        categories={categories}
-      />
     </div>
   );
 }

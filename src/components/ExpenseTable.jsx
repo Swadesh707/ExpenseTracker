@@ -1,7 +1,9 @@
-import React from "react";
+import React, { useState } from "react";
+import { useAuth } from "../context/AuthContext";
 
 export function ExpenseTable({
-  filteredExpenses,
+  expenses,
+  fetchExpenses,
   searchQuery,
   setSearchQuery,
   categoryFilter,
@@ -9,14 +11,217 @@ export function ExpenseTable({
   sortBy,
   setSortBy,
   categories,
-  onEdit,
-  onDelete,
+  show,
+  setShow,
 }) {
+  const { token } = useAuth();
+  const defaultCategory = categories.length > 0 ? categories[0] : "";
+  const [description, setDescription] = useState("");
+  const [amount, setAmount] = useState("");
+  const [category, setCategory] = useState(defaultCategory);
+  const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
+  const [editingId, setEditingId] = useState(null);
+  const [loading, setLoading] = useState(false);
+
+  // Sync category default when categories load
+  React.useEffect(() => {
+    if (!category && categories.length > 0) {
+      setCategory(categories[0]);
+    }
+  }, [categories, category]);
+
+  const handleEdit = (item) => {
+    setEditingId(item._id);
+    setDescription(item.description || "");
+    setAmount(item.amount !== undefined ? item.amount : "");
+    setCategory(item.category || defaultCategory);
+    setDate(item.date ? item.date.split("T")[0] : new Date().toISOString().split("T")[0]);
+    setShow(true);
+  };
+
+  const handleClose = () => {
+    setShow(false);
+    setEditingId(null);
+    setDescription("");
+    setAmount("");
+    setCategory(defaultCategory);
+    setDate(new Date().toISOString().split("T")[0]);
+  };
+
+  const saveExpense = async () => {
+    if (!description.trim() || !amount) {
+      alert("Please fill in description and amount");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const payload = {
+        description: description.trim(),
+        amount: Number(amount) || 0,
+        category,
+        date,
+      };
+
+      if (editingId !== null) {
+        const res = await fetch(`http://localhost:8000/expense/update/${editingId}`, {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify(payload),
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          throw new Error(data.message || "Failed to update expense");
+        }
+      } else {
+        const res = await fetch("http://localhost:8000/expense/create", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify(payload),
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          throw new Error(data.message || "Failed to create expense");
+        }
+      }
+
+      await fetchExpenses();
+      handleClose();
+    } catch (err) {
+      alert(err.message || "An error occurred");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDelete = async (id) => {
+    const isConfirmed = window.confirm("Are you sure you want to delete this expense?");
+    if (isConfirmed) {
+      try {
+        const res = await fetch(`http://localhost:8000/expense/delete/${id}`, {
+          method: "DELETE",
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          throw new Error(data.message || "Failed to delete expense");
+        }
+        await fetchExpenses();
+      } catch (err) {
+        alert(err.message || "An error occurred while deleting");
+      }
+    }
+  };
+
   return (
     <div className="bg-white rounded-xl border border-gray-100 shadow-xs p-6">
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
+      <div className="flex justify-between items-center mb-6">
         <h3 className="text-base font-bold text-gray-900">Expense History</h3>
       </div>
+
+      {show && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+          <div className="w-[90%] max-w-md rounded-2xl bg-white p-6 shadow-2xl animate-in fade-in zoom-in duration-200">
+            {/* Header */}
+            <div className="mb-5 flex items-center justify-between">
+              <h2 className="text-xl font-bold text-gray-800">
+                {editingId !== null ? "Edit Expense" : "Add Expense"}
+              </h2>
+              <button
+                onClick={handleClose}
+                className="rounded-full p-2 hover:bg-gray-100 cursor-pointer text-gray-500"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="space-y-4 text-xs">
+              <div>
+                <label className="mb-1 block text-sm font-medium text-gray-700">
+                  Description
+                </label>
+                <input
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  type="text"
+                  placeholder="Enter description"
+                  className="w-full rounded-lg border border-gray-300 px-4 py-2 outline-none transition focus:border-black"
+                />
+              </div>
+
+              <div>
+                <label className="mb-1 block text-sm font-medium text-gray-700">
+                  Amount ($)
+                </label>
+                <input
+                  value={amount}
+                  onChange={(e) => setAmount(e.target.value)}
+                  type="number"
+                  placeholder="Enter amount"
+                  className="w-full rounded-lg border border-gray-300 px-4 py-2 outline-none transition focus:border-black"
+                />
+              </div>
+
+              <div>
+                <label className="mb-1 block text-sm font-medium text-gray-700">
+                  Category
+                </label>
+                <select
+                  value={category}
+                  onChange={(e) => setCategory(e.target.value)}
+                  className="w-full rounded-lg border border-gray-300 px-4 py-2 outline-none transition focus:border-black cursor-pointer bg-white"
+                >
+                  {categories.map((item, index) => (
+                    <option key={index} value={item}>
+                      {item}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="mb-1 block text-sm font-medium text-gray-700">
+                  Date
+                </label>
+                <input
+                  value={date}
+                  onChange={(e) => setDate(e.target.value)}
+                  type="date"
+                  className="w-full rounded-lg border border-gray-300 px-4 py-2 outline-none transition focus:border-black"
+                />
+              </div>
+            </div>
+
+            <div className="mt-6 flex justify-end gap-3 text-xs">
+              <button
+                onClick={handleClose}
+                disabled={loading}
+                className="rounded-lg border border-gray-300 px-5 py-2 font-medium hover:bg-gray-100 cursor-pointer"
+              >
+                Cancel
+              </button>
+
+              <button
+                onClick={saveExpense}
+                disabled={loading}
+                className="rounded-lg bg-black px-5 py-2 font-medium text-white transition hover:bg-gray-800 cursor-pointer disabled:opacity-50"
+              >
+                {loading
+                  ? "Saving..."
+                  : editingId !== null
+                  ? "Update Expense"
+                  : "Save Expense"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="flex flex-col md:flex-row gap-3 mb-6">
         <div className="relative flex-1">
@@ -49,9 +254,9 @@ export function ExpenseTable({
             className="bg-gray-50/70 border border-gray-200 rounded-xl px-3.5 py-2.5 text-xs text-gray-700 outline-none focus:border-gray-400 transition cursor-pointer"
           >
             <option value="All Categories">All Categories</option>
-            {categories.map((c) => (
-              <option key={c} value={c}>
-                {c}
+            {categories.map((item, index) => (
+              <option key={index} value={item}>
+                {item}
               </option>
             ))}
           </select>
@@ -61,16 +266,28 @@ export function ExpenseTable({
             onChange={(e) => setSortBy(e.target.value)}
             className="bg-gray-50/70 border border-gray-200 rounded-xl px-3.5 py-2.5 text-xs text-gray-700 outline-none focus:border-gray-400 transition cursor-pointer"
           >
-            <option value="Date">Sort by Date</option>
-            <option value="Amount">Sort by Amount</option>
+            <option value="date-desc">Sort by Date (Newest)</option>
+            <option value="date-asc">Sort by Date (Oldest)</option>
+            <option value="amount-desc">Sort by Amount (Highest)</option>
+            <option value="amount-asc">Sort by Amount (Lowest)</option>
           </select>
         </div>
       </div>
 
-      {filteredExpenses.length === 0 ? (
+      {expenses.length === 0 ? (
         <div className="py-12 text-center text-xs text-gray-400 flex flex-col items-center gap-2">
-          <svg className="w-8 h-8 text-gray-300" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M20.25 7.5l-.625 10.632a2.25 2.25 0 01-2.247 2.118H6.622a2.25 2.25 0 01-2.247-2.118L3.75 7.5M10 11.25h4M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125z" />
+          <svg
+            className="w-8 h-8 text-gray-300"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.5"
+            viewBox="0 0 24 24"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              d="M20.25 7.5l-.625 10.632a2.25 2.25 0 01-2.247 2.118H6.622a2.25 2.25 0 01-2.247-2.118L3.75 7.5M10 11.25h4M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125z"
+            />
           </svg>
           <span>No expenses found matching your criteria.</span>
         </div>
@@ -87,32 +304,34 @@ export function ExpenseTable({
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {filteredExpenses.map((item) => (
-                <tr key={item.id} className="hover:bg-gray-50/50 transition">
-                  <td className="py-4 text-gray-600">{item.date}</td>
+              {expenses.map((item) => (
+                <tr key={item._id} className="hover:bg-gray-50/50 transition">
+                  <td className="py-4 text-gray-600">
+                    {item.date ? item.date.split("T")[0] : ""}
+                  </td>
                   <td className="py-4 font-semibold text-gray-900">{item.description}</td>
                   <td className="py-4">
                     <span className="bg-purple-50 text-purple-600 font-semibold px-2.5 py-1 rounded-md text-[11px]">
                       {item.category}
                     </span>
                   </td>
-                  <td className="py-4 font-bold text-gray-900">${item.amount.toFixed(2)}</td>
+                  <td className="py-4 font-bold text-gray-900">
+                    ${Number(item.amount).toFixed(2)}
+                  </td>
                   <td className="py-4 text-right">
                     <div className="flex items-center justify-end gap-2">
-                      {/* Edit Button */}
                       <button
-                        onClick={() => onEdit(item)}
+                        onClick={() => handleEdit(item)}
                         className="p-1.5 border border-gray-200 rounded-lg text-gray-500 hover:text-gray-900 hover:border-gray-300 hover:bg-gray-50 transition cursor-pointer"
                         title="Edit"
                       >
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10" />
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L6.832 19.82a4.5 4.5 0 01-1.897 1.13l-2.685.8.8-2.685a4.5 4.5 0 011.13-1.897L16.863 4.487zm0 0L19.5 7.125" />
                         </svg>
                       </button>
 
-                      {/* Delete Button */}
                       <button
-                        onClick={() => onDelete(item.id)}
+                        onClick={() => handleDelete(item._id)}
                         className="p-1.5 border border-red-200 rounded-lg text-red-500 hover:bg-red-50 hover:border-red-300 transition cursor-pointer"
                         title="Delete"
                       >

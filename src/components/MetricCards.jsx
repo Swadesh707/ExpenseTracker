@@ -1,19 +1,13 @@
 import React from "react";
 
-export function MetricCards({ expenses, totalExpenses }) {
-  const thisMonthExpenses = expenses
-    .filter((e) => {
-      const d = new Date(e.date);
-      const now = new Date();
-      return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
-    })
-    .reduce((sum, e) => sum + Number(e.amount), 0);
-
-  const uniqueCategories = new Set(expenses.map((e) => e.category)).size;
+export function MetricCards({ summary }) {
+  const totalExpenses = Number(summary?.totalExpenses) || 0;
+  const thisMonthExpenses = Number(summary?.thisMonthExpenses) || 0;
+  const totalTransactions = Number(summary?.totalTransactions) || 0;
+  const categoriesCount = Number(summary?.categoriesCount) || 0;
 
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-      {/* Total Expenses */}
       <div className="bg-white p-6 rounded-xl border border-gray-100/80 shadow-xs flex justify-between items-start">
         <div>
           <p className="text-xs font-semibold text-gray-900 mb-6">Total Expenses</p>
@@ -22,7 +16,6 @@ export function MetricCards({ expenses, totalExpenses }) {
         <span className="text-gray-400 text-sm font-normal">$</span>
       </div>
 
-      {/* This Month */}
       <div className="bg-white p-6 rounded-xl border border-gray-100/80 shadow-xs flex justify-between items-start">
         <div>
           <p className="text-xs font-semibold text-gray-900 mb-6">This Month</p>
@@ -33,22 +26,20 @@ export function MetricCards({ expenses, totalExpenses }) {
         </svg>
       </div>
 
-      {/* Total Transactions */}
       <div className="bg-white p-6 rounded-xl border border-gray-100/80 shadow-xs flex justify-between items-start">
         <div>
           <p className="text-xs font-semibold text-gray-900 mb-6">Total Transactions</p>
-          <h2 className="text-2xl font-bold text-gray-900">{expenses.length}</h2>
+          <h2 className="text-2xl font-bold text-gray-900">{totalTransactions}</h2>
         </div>
         <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 18L9 11.25l4.306 4.307a11.95 11.95 0 005.814-5.519l2.74-1.22m0 0l-5.94-2.28m5.94 2.28l-2.28 5.94" />
         </svg>
       </div>
 
-      {/* Categories */}
       <div className="bg-white p-6 rounded-xl border border-gray-100/80 shadow-xs flex justify-between items-start">
         <div>
           <p className="text-xs font-semibold text-gray-900 mb-6">Categories</p>
-          <h2 className="text-2xl font-bold text-gray-900">{uniqueCategories}</h2>
+          <h2 className="text-2xl font-bold text-gray-900">{categoriesCount}</h2>
         </div>
         <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
