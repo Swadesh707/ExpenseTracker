@@ -5,7 +5,11 @@ import { MetricCards } from "./components/MetricCards";
 import { ExpenseTable } from "./components/ExpenseTable";
 import { LoginPage } from "./pages/LoginPage";
 import { ProtectedRoute } from "./components/ProtectedRoute";
+import { AdminRoute } from "./components/AdminRoute";
+import { AdminCategoriesPage } from "./pages/admin/AdminCategoriesPage";
+import { AdminUsersPage } from "./pages/admin/AdminUsersPage";
 import { useAuth } from "./context/AuthContext";
+import API_BASE_URL from "./config/api.js";
 
 
 export function calculateExpenseSummary(expenses = []) {
@@ -13,9 +17,7 @@ export function calculateExpenseSummary(expenses = []) {
   const currentYear = now.getFullYear();
   const currentMonth = now.getMonth();
 
-
   const totalExpenses = expenses.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
-
 
   const thisMonthExpenses = expenses
     .filter((item) => {
@@ -25,9 +27,7 @@ export function calculateExpenseSummary(expenses = []) {
     })
     .reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
 
-
   const totalTransactions = expenses.length;
-
 
   const uniqueCategories = new Set(
     expenses.map((item) => item.category).filter(Boolean)
@@ -47,12 +47,37 @@ export default function App() {
 
   return (
     <Routes>
+      {/* Public */}
       <Route
         path="/login"
+        element={isAuthenticated ? <Navigate to="/" replace /> : <LoginPage />}
+      />
+
+      {/* Admin-only pages (require admin role) */}
+      <Route
+        path="/admin/categories"
         element={
-          isAuthenticated ? <Navigate to="/" replace /> : <LoginPage />
+          <AdminRoute>
+            <div className="min-h-screen bg-[#f8f9fa] flex flex-col">
+              <Navbar />
+              <AdminCategoriesPage />
+            </div>
+          </AdminRoute>
         }
       />
+      <Route
+        path="/admin/users"
+        element={
+          <AdminRoute>
+            <div className="min-h-screen bg-[#f8f9fa] flex flex-col">
+              <Navbar />
+              <AdminUsersPage />
+            </div>
+          </AdminRoute>
+        }
+      />
+
+      {/* Default protected dashboard */}
       <Route
         path="/*"
         element={
@@ -72,12 +97,11 @@ function Dashboard() {
   const [categoryFilter, setCategoryFilter] = useState("All Categories");
   const [sortBy, setSortBy] = useState("date-desc");
   const [show, setShow] = useState(false);
-
   const [categories, setCategories] = useState([]);
 
   const fetchCategories = useCallback(async () => {
     try {
-      const res = await fetch("http://localhost:8000/category/getAll");
+      const res = await fetch(`${API_BASE_URL}/api/categories`);
       const data = await res.json();
       if (Array.isArray(data)) {
         setCategories(data.map((c) => (typeof c === "string" ? c : c.title)));
@@ -89,11 +113,10 @@ function Dashboard() {
 
   const fetchExpenses = useCallback(async () => {
     try {
-      const res = await fetch("http://localhost:8000/expense/getAll", {
+      const res = await fetch(`${API_BASE_URL}/api/expenses`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       const data = await res.json();
-      // Supports both plain array [...] and { data: [...] }
       if (Array.isArray(data)) {
         setExpenses(data);
       } else if (data && Array.isArray(data.data)) {
@@ -111,9 +134,7 @@ function Dashboard() {
     fetchCategories();
   }, [fetchExpenses, fetchCategories]);
 
-
   const summary = useMemo(() => calculateExpenseSummary(expenses), [expenses]);
-
 
   const filteredExpenses = useMemo(() => {
     return expenses

@@ -1,5 +1,7 @@
 import React, { useState } from "react";
 import { useAuth } from "../context/AuthContext";
+import API_BASE_URL from "../config/api.js";
+
 
 export function ExpenseTable({
   expenses,
@@ -64,7 +66,7 @@ export function ExpenseTable({
       };
 
       if (editingId !== null) {
-        const res = await fetch(`http://localhost:8000/expense/update/${editingId}`, {
+        const res = await fetch(`${API_BASE_URL}/api/expenses/${editingId}`, {
           method: "PUT",
           headers: {
             "Content-Type": "application/json",
@@ -77,7 +79,7 @@ export function ExpenseTable({
           throw new Error(data.message || "Failed to update expense");
         }
       } else {
-        const res = await fetch("http://localhost:8000/expense/create", {
+        const res = await fetch(`${API_BASE_URL}/api/expenses`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -104,7 +106,7 @@ export function ExpenseTable({
     const isConfirmed = window.confirm("Are you sure you want to delete this expense?");
     if (isConfirmed) {
       try {
-        const res = await fetch(`http://localhost:8000/expense/delete/${id}`, {
+        const res = await fetch(`${API_BASE_URL}/api/expenses/${id}`, {
           method: "DELETE",
           headers: { Authorization: `Bearer ${token}` },
         });

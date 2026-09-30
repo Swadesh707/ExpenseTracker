@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useCallback } from "react";
+import API_BASE_URL from "../config/api.js";
 
 const AuthContext = createContext(null);
 
@@ -45,19 +46,20 @@ export function AuthProvider({ children }) {
   const login = useCallback(async (email, password) => {
     let res;
     try {
-      res = await fetch("http://localhost:8000/auth/login", {
+      res = await fetch(`${API_BASE_URL}/auth/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, password }),
       });
     } catch {
       throw new Error(
-        "Could not connect to backend at http://localhost:8000. Please ensure your backend server is running."
+        `Could not connect to backend at ${API_BASE_URL}. Please ensure your backend server is running.`
       );
     }
 
     const data = await handleResponse(res, "/auth/login");
 
+    // Store full user including role
     const userData = data.user || { email };
     const authToken = data.token || "session";
 
@@ -70,14 +72,14 @@ export function AuthProvider({ children }) {
   const register = useCallback(async (name, email, password) => {
     let res;
     try {
-      res = await fetch("http://localhost:8000/auth/register", {
+      res = await fetch(`${API_BASE_URL}/auth/register`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name, email, password }),
       });
     } catch {
       throw new Error(
-        "Could not connect to backend at http://localhost:8000. Please ensure your backend server is running."
+        `Could not connect to backend at ${API_BASE_URL}. Please ensure your backend server is running.`
       );
     }
 
@@ -93,16 +95,26 @@ export function AuthProvider({ children }) {
   }, []);
 
   const logout = useCallback(() => {
+    // Best-effort backend logout
+    if (token) {
+      fetch(`${API_BASE_URL}/auth/logout`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      }).catch(() => {});
+    }
     localStorage.removeItem("expense_user");
     localStorage.removeItem("expense_token");
     setUser(null);
     setToken(null);
-  }, []);
+  }, [token]);
 
   const isAuthenticated = !!user && !!token;
+  const isAdmin = isAuthenticated && user?.role === "admin";
 
   return (
-    <AuthContext.Provider value={{ user, token, isAuthenticated, login, register, logout }}>
+    <AuthContext.Provider
+      value={{ user, token, isAuthenticated, isAdmin, login, register, logout }}
+    >
       {children}
     </AuthContext.Provider>
   );
