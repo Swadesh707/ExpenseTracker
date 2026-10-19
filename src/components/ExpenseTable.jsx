@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { useAuth } from "../context/AuthContext";
+import { useNotification } from "../context/NotificationContext";
 import API_BASE_URL from "../config/api.js";
 
 
@@ -17,6 +18,8 @@ export function ExpenseTable({
   setShow,
 }) {
   const { token } = useAuth();
+  const { error: notifyError, warning: notifyWarning, success: notifySuccess, confirm: notifyConfirm } = useNotification();
+
   const defaultCategory = categories.length > 0 ? categories[0] : "";
   const [description, setDescription] = useState("");
   const [amount, setAmount] = useState("");
@@ -52,7 +55,7 @@ export function ExpenseTable({
 
   const saveExpense = async () => {
     if (!description.trim() || !amount) {
-      alert("Please fill in description and amount");
+      notifyWarning("Please fill in description and amount");
       return;
     }
 
@@ -94,16 +97,20 @@ export function ExpenseTable({
       }
 
       await fetchExpenses();
+      notifySuccess(editingId !== null ? "Expense updated successfully!" : "Expense added successfully!");
       handleClose();
     } catch (err) {
-      alert(err.message || "An error occurred");
+      notifyError(err.message || "An error occurred");
     } finally {
       setLoading(false);
     }
   };
 
   const handleDelete = async (id) => {
-    const isConfirmed = window.confirm("Are you sure you want to delete this expense?");
+    const isConfirmed = await notifyConfirm("Are you sure you want to delete this expense?", {
+      title: "Delete Expense",
+      confirmText: "Delete",
+    });
     if (isConfirmed) {
       try {
         const res = await fetch(`${API_BASE_URL}/api/expenses/${id}`, {
@@ -115,8 +122,9 @@ export function ExpenseTable({
           throw new Error(data.message || "Failed to delete expense");
         }
         await fetchExpenses();
+        notifySuccess("Expense deleted successfully!");
       } catch (err) {
-        alert(err.message || "An error occurred while deleting");
+        notifyError(err.message || "An error occurred while deleting");
       }
     }
   };
@@ -313,7 +321,7 @@ export function ExpenseTable({
                   </td>
                   <td className="py-4 font-semibold text-gray-900">{item.description}</td>
                   <td className="py-4">
-                    <span className="bg-purple-50 text-purple-600 font-semibold px-2.5 py-1 rounded-md text-[11px]">
+                    <span className="bg-gray-100 text-gray-700 font-medium px-2.5 py-1 rounded-md text-[11px]">
                       {item.category}
                     </span>
                   </td>

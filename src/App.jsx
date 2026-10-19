@@ -55,6 +55,10 @@ export default function App() {
 
       {/* Admin-only pages (require admin role) */}
       <Route
+        path="/admin"
+        element={<Navigate to="/admin/categories" replace />}
+      />
+      <Route
         path="/admin/categories"
         element={
           <AdminRoute>

@@ -1,9 +1,11 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { useAuth } from "../../context/AuthContext";
+import { useNotification } from "../../context/NotificationContext";
 import API_BASE_URL from "../../config/api.js";
 
 export function AdminCategoriesPage() {
   const { token } = useAuth();
+  const { warning: notifyWarning, error: notifyError, success: notifySuccess, confirm: notifyConfirm } = useNotification();
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
@@ -60,7 +62,7 @@ export function AdminCategoriesPage() {
 
   const saveCategory = async () => {
     if (!formTitle.trim()) {
-      alert("Category title is required");
+      notifyWarning("Category title is required");
       return;
     }
     setActionLoading(true);
@@ -82,16 +84,21 @@ export function AdminCategoriesPage() {
       if (!res.ok) throw new Error(data.message || "Failed to save category");
 
       await fetchCategories();
+      notifySuccess(editingId ? "Category updated successfully!" : "Category created successfully!");
       closeForm();
     } catch (err) {
-      alert(err.message || "An error occurred");
+      notifyError(err.message || "An error occurred");
     } finally {
       setActionLoading(false);
     }
   };
 
   const deleteCategory = async (id, title) => {
-    if (!confirm(`Delete category "${title}"? This cannot be undone.`)) return;
+    const confirmed = await notifyConfirm(`Delete category "${title}"? This cannot be undone.`, {
+      title: "Delete Category",
+      confirmText: "Delete",
+    });
+    if (!confirmed) return;
     setActionLoading(true);
     try {
       const res = await fetch(`${API_BASE_URL}/api/categories/${id}`, {
@@ -101,86 +108,81 @@ export function AdminCategoriesPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || "Failed to delete");
       await fetchCategories();
+      notifySuccess(`Category "${title}" deleted successfully!`);
     } catch (err) {
-      alert(err.message || "An error occurred");
+      notifyError(err.message || "An error occurred");
     } finally {
       setActionLoading(false);
     }
   };
 
   return (
-    <div className="max-w-4xl mx-auto px-6 py-8">
+    <div className="max-w-6xl mx-auto w-full px-6 md:px-12 py-10">
       {/* Page Header */}
       <div className="flex items-center justify-between mb-8">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Category Management</h1>
-          <p className="text-xs text-gray-500 mt-1">Add, edit, or remove expense categories</p>
+          <h1 className="text-2xl font-bold tracking-tight text-gray-900">Category Management</h1>
+          <p className="text-xs text-gray-500 mt-1.5">Add, edit, or remove expense categories</p>
         </div>
         <button
           onClick={openCreate}
-          className="bg-black hover:bg-gray-800 text-white px-4 py-2 rounded-xl text-xs font-semibold shadow-sm transition cursor-pointer"
+          className="bg-black hover:bg-gray-800 text-white px-5 py-2.5 rounded-xl text-xs font-semibold shadow-xs transition cursor-pointer"
         >
           + Add Category
         </button>
       </div>
 
       {error && (
-        <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-xs text-red-600">
+        <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-xl text-xs text-red-600">
           {error}
         </div>
       )}
 
       {/* Categories Table */}
-      <div className="bg-white rounded-xl border border-gray-100 shadow-xs overflow-hidden">
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-xs overflow-hidden">
         {loading ? (
-          <div className="py-12 text-center text-xs text-gray-400">Loading categories…</div>
+          <div className="py-16 text-center text-xs text-gray-400">Loading categories…</div>
         ) : categories.length === 0 ? (
-          <div className="py-12 text-center text-xs text-gray-400">No categories found.</div>
+          <div className="py-16 text-center text-xs text-gray-400">No categories found.</div>
         ) : (
           <table className="w-full text-left text-xs">
             <thead>
-              <tr className="text-gray-400 border-b border-gray-100 bg-gray-50">
-                <th className="px-6 py-3 font-medium">Title</th>
-                <th className="px-6 py-3 font-medium">Status</th>
-                <th className="px-6 py-3 font-medium text-right">Actions</th>
+              <tr className="text-gray-400 border-b border-gray-100 bg-gray-50/70">
+                <th className="px-8 py-4 font-medium">Title</th>
+                <th className="px-8 py-4 font-medium">Status</th>
+                <th className="px-8 py-4 font-medium text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
               {categories.map((cat) => (
                 <tr key={cat._id} className="hover:bg-gray-50/50 transition">
-                  <td className="px-6 py-4 font-semibold text-gray-900">{cat.title}</td>
-                  <td className="px-6 py-4">
+                  <td className="px-8 py-5 font-semibold text-gray-900 text-xs">{cat.title}</td>
+                  <td className="px-8 py-5">
                     <span
-                      className={`inline-block px-2.5 py-1 rounded-full text-[11px] font-semibold ${
+                      className={`inline-block px-3 py-1 rounded-full text-[11px] font-semibold ${
                         cat.status
-                          ? "bg-green-50 text-green-600"
-                          : "bg-gray-100 text-gray-500"
+                          ? "bg-green-50 text-green-700"
+                          : "bg-gray-100 text-gray-600"
                       }`}
                     >
                       {cat.status ? "Active" : "Inactive"}
                     </span>
                   </td>
-                  <td className="px-6 py-4 text-right">
-                    <div className="flex items-center justify-end gap-2">
+                  <td className="px-8 py-5 text-right">
+                    <div className="flex items-center justify-end gap-4">
                       <button
                         onClick={() => openEdit(cat)}
                         disabled={actionLoading}
-                        className="p-1.5 border border-gray-200 rounded-lg text-gray-500 hover:text-gray-900 hover:border-gray-300 hover:bg-gray-50 transition cursor-pointer disabled:opacity-50"
-                        title="Edit"
+                        className="text-xs font-medium text-gray-700 hover:text-black hover:underline transition cursor-pointer disabled:opacity-50"
                       >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L6.832 19.82a4.5 4.5 0 01-1.897 1.13l-2.685.8.8-2.685a4.5 4.5 0 011.13-1.897L16.863 4.487zm0 0L19.5 7.125" />
-                        </svg>
+                        Edit
                       </button>
                       <button
                         onClick={() => deleteCategory(cat._id, cat.title)}
                         disabled={actionLoading}
-                        className="p-1.5 border border-red-200 rounded-lg text-red-500 hover:bg-red-50 hover:border-red-300 transition cursor-pointer disabled:opacity-50"
-                        title="Delete"
+                        className="text-xs font-medium text-red-600 hover:text-red-800 hover:underline transition cursor-pointer disabled:opacity-50"
                       >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
-                        </svg>
+                        Delete
                       </button>
                     </div>
                   </td>
@@ -193,33 +195,33 @@ export function AdminCategoriesPage() {
 
       {/* Create / Edit Modal */}
       {showForm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-          <div className="w-[90%] max-w-md rounded-2xl bg-white p-6 shadow-2xl">
-            <div className="mb-5 flex items-center justify-between">
-              <h2 className="text-xl font-bold text-gray-800">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs">
+          <div className="w-[90%] max-w-md rounded-2xl bg-white p-7 shadow-2xl">
+            <div className="mb-6 flex items-center justify-between">
+              <h2 className="text-lg font-bold text-gray-900">
                 {editingId ? "Edit Category" : "New Category"}
               </h2>
               <button
                 onClick={closeForm}
-                className="rounded-full p-2 hover:bg-gray-100 cursor-pointer text-gray-500"
+                className="rounded-full p-2 hover:bg-gray-100 cursor-pointer text-gray-400 hover:text-gray-700 text-xs"
               >
                 ✕
               </button>
             </div>
 
-            <div className="space-y-4 text-xs">
+            <div className="space-y-5 text-xs">
               <div>
-                <label className="mb-1 block text-sm font-medium text-gray-700">Title</label>
+                <label className="mb-2 block text-xs font-medium text-gray-700">Category Title</label>
                 <input
                   type="text"
                   value={formTitle}
                   onChange={(e) => setFormTitle(e.target.value)}
                   placeholder="e.g. Food & Dining"
-                  className="w-full rounded-lg border border-gray-300 px-4 py-2 outline-none transition focus:border-black"
+                  className="w-full rounded-xl border border-gray-300 px-4 py-2.5 text-xs outline-none transition focus:border-black"
                 />
               </div>
               <div className="flex items-center gap-3">
-                <label className="text-sm font-medium text-gray-700">Active</label>
+                <label className="text-xs font-medium text-gray-700">Active Status</label>
                 <button
                   type="button"
                   onClick={() => setFormStatus((s) => !s)}
@@ -236,20 +238,20 @@ export function AdminCategoriesPage() {
               </div>
             </div>
 
-            <div className="mt-6 flex justify-end gap-3 text-xs">
+            <div className="mt-8 flex justify-end gap-3 text-xs">
               <button
                 onClick={closeForm}
                 disabled={actionLoading}
-                className="rounded-lg border border-gray-300 px-5 py-2 font-medium hover:bg-gray-100 cursor-pointer"
+                className="rounded-xl border border-gray-300 px-5 py-2.5 font-medium hover:bg-gray-100 cursor-pointer"
               >
                 Cancel
               </button>
               <button
                 onClick={saveCategory}
                 disabled={actionLoading}
-                className="rounded-lg bg-black px-5 py-2 font-medium text-white transition hover:bg-gray-800 cursor-pointer disabled:opacity-50"
+                className="rounded-xl bg-black px-6 py-2.5 font-medium text-white transition hover:bg-gray-800 cursor-pointer disabled:opacity-50"
               >
-                {actionLoading ? "Saving…" : editingId ? "Update" : "Create"}
+                {actionLoading ? "Saving…" : editingId ? "Update Category" : "Create Category"}
               </button>
             </div>
           </div>

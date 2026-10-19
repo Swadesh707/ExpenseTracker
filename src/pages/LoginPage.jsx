@@ -1,10 +1,12 @@
 import React, { useState } from "react";
 import { useAuth } from "../context/AuthContext";
+import { useNotification } from "../context/NotificationContext";
 import { useNavigate } from "react-router-dom";
 
 export function LoginPage() {
   const { login, register } = useAuth();
   const navigate = useNavigate();
+  const { warning: notifyWarning, error: notifyError, success: notifySuccess } = useNotification();
 
   const [isRegister, setIsRegister] = useState(false);
   const [name, setName] = useState("");
@@ -16,12 +18,12 @@ export function LoginPage() {
     e.preventDefault();
 
     if (!email.trim() || !password.trim()) {
-      alert("Please fill in all required fields.");
+      notifyWarning("Please fill in all required fields.");
       return;
     }
 
     if (isRegister && !name.trim()) {
-      alert("Please enter your name.");
+      notifyWarning("Please enter your name.");
       return;
     }
 
@@ -29,12 +31,14 @@ export function LoginPage() {
     try {
       if (isRegister) {
         await register(name.trim(), email.trim(), password);
+        notifySuccess("Account created successfully! Welcome.");
       } else {
         await login(email.trim(), password);
+        notifySuccess("Signed in successfully! Welcome back.");
       }
       navigate("/", { replace: true });
     } catch (err) {
-      alert(err.message || "An unexpected error occurred.");
+      notifyError(err.message || "An unexpected error occurred.");
     } finally {
       setLoading(false);
     }

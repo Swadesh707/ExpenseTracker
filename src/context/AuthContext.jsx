@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useCallback } from "react";
+import React, { createContext, useContext, useState, useCallback, useEffect } from "react";
 import API_BASE_URL from "../config/api.js";
 
 const AuthContext = createContext(null);
@@ -42,6 +42,22 @@ export function AuthProvider({ children }) {
   const [token, setToken] = useState(() => {
     return localStorage.getItem("expense_token") || null;
   });
+
+  // Always sync latest user role and profile from the backend on mount
+  useEffect(() => {
+    if (!token) return;
+    fetch(`${API_BASE_URL}/auth/me`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (data?.user) {
+          localStorage.setItem("expense_user", JSON.stringify(data.user));
+          setUser(data.user);
+        }
+      })
+      .catch(() => {});
+  }, [token]);
 
   const login = useCallback(async (email, password) => {
     let res;
